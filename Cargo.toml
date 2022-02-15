@@ -1,0 +1,11 @@
+[package]
+name = "nonbinary"
+version = "0.0.0"
+edition = "2021"
+description = "(WIP) Customizable binary deserializer"
+license = "MPL-2.0"
+homepage = "https://github.com/CerulanLumina/nonbinary"
+repository = "https://github.com/CerulanLumina/nonbinary"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
