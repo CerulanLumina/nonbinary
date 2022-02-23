@@ -7,12 +7,8 @@ license = "MPL-2.0"
 homepage = "https://github.com/CerulanLumina/nonbinary"
 repository = "https://github.com/CerulanLumina/nonbinary"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [lib]
-crate-type = ["lib", "staticlib", "cdylib"]
+crate-type = ["lib"]
 
-[dependencies]
-
-[build-dependencies]
-cbindgen = "0.20.0"
+[features]
+std = []

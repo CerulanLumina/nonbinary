@@ -1,8 +1,4 @@
 
-c_test/build/
-c_test/cmake-build-debug/
-
-headers
 
 # Created by https://www.toptal.com/developers/gitignore/api/rust,clion+all
 # Edit at https://www.toptal.com/developers/gitignore?templates=rust,clion+all
