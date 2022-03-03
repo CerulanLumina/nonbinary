@@ -1,8 +1,14 @@
 #![cfg_attr(not(test), no_std)]
 // mod deserializer;
 
+pub mod deserializer;
+
 pub fn add(a: u32, b: u32) -> u32 {
-    a + b
+    let sum = a + b;
+    if sum == 42 {
+        panic!("WHAT IS THE QUESTION THOUGH");
+    }
+    sum
 }
 
 #[cfg(test)]
@@ -20,14 +26,16 @@ mod tests {
         fn create(data: &'a [u8]) -> Template<'a> {
             let owo = (data.as_ptr() as usize + 0x20) as *const u32;
             let coolnum = unsafe { &*owo };
-            Template { _data: data, coolnum }
+            Template {
+                _data: data,
+                coolnum,
+            }
         }
     }
 
-
     struct Test {
         pub v1: u64,
-        pub v2: u64
+        pub v2: u64,
     }
 
     #[test]
@@ -38,7 +46,6 @@ mod tests {
 
         // Deserialzer.register_type("Test", Test::default())
         //
-
     }
 
     fn get_data_bin() -> [u8; 1024] {
@@ -51,14 +58,10 @@ mod tests {
 
     #[test]
     fn idea_proof_of_concept() {
-
-
         let b = get_data_bin();
 
         let templ = Template::create(&b);
 
         assert_eq!(*templ.coolnum, 70499491);
-
     }
-
 }
