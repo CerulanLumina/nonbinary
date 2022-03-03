@@ -1,3 +1,4 @@
+#![feature(generic_associated_types)]
 #![cfg_attr(not(test), no_std)]
 // mod deserializer;
 
