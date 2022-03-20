@@ -1,5 +1,4 @@
-#![feature(generic_associated_types)]
-#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 // mod deserializer;
 
 pub mod deserializer;
@@ -11,6 +10,8 @@ pub fn add(a: u32, b: u32) -> u32 {
     }
     sum
 }
+
+
 
 #[cfg(test)]
 mod tests {
