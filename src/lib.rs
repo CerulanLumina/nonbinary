@@ -1,5 +1,4 @@
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
-// mod deserializer;
 
 pub mod deserializer;
 
@@ -11,9 +10,9 @@ pub fn add(a: u32, b: u32) -> u32 {
     sum
 }
 #[cfg(test)]
-extern crate std;
-#[cfg(test)]
 extern crate arrayvec;
+#[cfg(test)]
+extern crate std;
 
 #[cfg(test)]
 mod tests {
@@ -28,5 +27,4 @@ mod tests {
         f.read_exact(&mut b).expect("reading file");
         b
     }
-
 }

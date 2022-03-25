@@ -1,42 +1,92 @@
-// pub mod nonalloc;
-// mod test;
-
 // 👻
 use core::marker::PhantomData;
-
 
 pub trait VecLike<T>: Extend<T> + AsRef<[T]> + Default {}
 impl<V, T: Extend<V> + AsRef<[V]> + Default> VecLike<V> for T {}
 
-
-pub struct DeserializerBuilder<T, V> where T: VecLike<DataType<V>>, V: VecLike<DataField> {
+pub struct DeserializerBuilder<T, V>
+where
+    T: VecLike<DataType<V>>,
+    V: VecLike<DataField>,
+{
     _phantom: PhantomData<V>,
-    inner: T
+    inner: T,
 }
 
-impl<T, V> DeserializerBuilder<T, V> where T: VecLike<DataType<V>>, V: VecLike<DataField> {
+impl<T, V> DeserializerBuilder<T, V>
+where
+    T: VecLike<DataType<V>>,
+    V: VecLike<DataField>,
+{
     pub fn new() -> DeserializerBuilder<T, V> {
-        DeserializerBuilder { _phantom: PhantomData, inner: T::default() }
+        DeserializerBuilder {
+            _phantom: PhantomData,
+            inner: T::default(),
+        }
     }
 
-    pub fn register_type(mut self, data_type: DataType<V>) -> Self {
+    pub fn register_type(&mut self, data_type: DataType<V>) -> usize {
+        let id = self.inner.as_ref().len();
         self.inner.extend([data_type]);
-        self
+        id
+    }
+
+    pub fn build(self) -> Deserializer<T, V> {
+        Deserializer::from_veclike(self.inner)
     }
 }
 
-pub struct DataTypeBuilder<T, Struct> where T: VecLike<DataField>, Struct: {
-    structure: Struct,
-    inner: T
+pub struct Deserializer<T, V>
+where
+    T: VecLike<DataType<V>>,
+    V: VecLike<DataField>,
+{
+    _phantom: PhantomData<V>,
+    inner: T,
 }
 
-impl<'a, T, Struct> DataTypeBuilder<T, Struct> where T: VecLike<DataField>, Struct: 'a + Copy {
+impl<T, V> Deserializer<T, V>
+where
+    T: VecLike<DataType<V>>,
+    V: VecLike<DataField>,
+{
+    pub(crate) fn from_veclike(veclike: T) -> Deserializer<T, V> {
+        assert!(
+            veclike.as_ref().len() > 0,
+            "Deserializer needs some types registered"
+        );
+        Deserializer {
+            _phantom: PhantomData,
+            inner: veclike,
+        }
+    }
+}
+
+pub struct DataTypeBuilder<T, Struct>
+where
+    T: VecLike<DataField>,
+    Struct:,
+{
+    structure: Struct,
+    inner: T,
+}
+
+impl<'a, T, Struct> DataTypeBuilder<T, Struct>
+where
+    T: VecLike<DataField>,
+    Struct: 'a + Copy,
+{
     pub fn new(default_struct: Struct) -> DataTypeBuilder<T, Struct> {
-        DataTypeBuilder { structure: default_struct, inner: T::default() }
+        DataTypeBuilder {
+            structure: default_struct,
+            inner: T::default(),
+        }
     }
 
     pub fn register_field<Return, Accessor>(&'a mut self, data_offset: usize, accessor: Accessor)
-        where Return: 'a + Copy + Deserializable, Accessor: Fn(&'a Struct) -> &'a Return
+    where
+        Return: 'a + Copy + Deserializable,
+        Accessor: Fn(&'a Struct) -> &'a Return,
     {
         let struct_ref = &self.structure;
         let struct_ptr = struct_ref as *const Struct as usize;
@@ -48,7 +98,6 @@ impl<'a, T, Struct> DataTypeBuilder<T, Struct> where T: VecLike<DataField>, Stru
             data_offset,
             ptr_offset: reference_ptr - struct_ptr,
         };
-
         self.inner.extend([new_field]);
     }
 }
@@ -67,9 +116,21 @@ macro_rules! basic_impl {
     };
 }
 
-basic_impl!(U8(u8), U16(u16), U32(u32), U64(u64), I8(i8), I16(i16), I32(i32), I64(i64));
+basic_impl!(
+    U8(u8),
+    U16(u16),
+    U32(u32),
+    U64(u64),
+    I8(i8),
+    I16(i16),
+    I32(i32),
+    I64(i64)
+);
 
-pub struct DataType<T> where T: VecLike<DataField> {
+pub struct DataType<T>
+where
+    T: VecLike<DataField>,
+{
     inner: T,
 }
 
@@ -95,9 +156,11 @@ pub enum FieldType {
 
 #[cfg(test)]
 mod builder_tests {
-    use crate::deserializer::{DataField, DataType, DataTypeBuilder, DeserializerBuilder, FieldType, VecLike};
-    use std::prelude::rust_2021::*;
+    use crate::deserializer::{
+        DataField, DataType, DataTypeBuilder, DeserializerBuilder, FieldType, VecLike,
+    };
     use arrayvec::ArrayVec;
+    use std::prelude::rust_2021::*;
 
     macro_rules! refptr_usize {
         ($e:expr) => { $e as *const _ as usize };
@@ -114,7 +177,6 @@ mod builder_tests {
     }
 
     fn build_simple_data_type<T: VecLike<DataField>>() {
-
         #[derive(Copy, Clone, Default)]
         #[allow(unused)]
         struct MyStruct {
@@ -130,24 +192,41 @@ mod builder_tests {
         dtb.register_field(0xc, |a| &a.c);
         dtb.register_field(0xd, |a| &a.d);
 
-        let test_verify = MyStruct { a: 32, b:12, c:64, d:8 };
+        let test_verify = MyStruct {
+            a: 32,
+            b: 12,
+            c: 64,
+            d: 8,
+        };
         let base_addr = refptr_usize!(&test_verify);
 
         assert_eq!(dtb.inner[0].field_type, FieldType::U32);
         assert_eq!(dtb.inner[0].data_offset, 0x0);
-        assert_eq!(dtb.inner[0].ptr_offset + base_addr, refptr_usize!(&test_verify.a));
+        assert_eq!(
+            dtb.inner[0].ptr_offset + base_addr,
+            refptr_usize!(&test_verify.a)
+        );
 
         assert_eq!(dtb.inner[1].field_type, FieldType::U64);
         assert_eq!(dtb.inner[1].data_offset, 0x4);
-        assert_eq!(dtb.inner[1].ptr_offset + base_addr, refptr_usize!(&test_verify.b));
+        assert_eq!(
+            dtb.inner[1].ptr_offset + base_addr,
+            refptr_usize!(&test_verify.b)
+        );
 
         assert_eq!(dtb.inner[2].field_type, FieldType::U8);
         assert_eq!(dtb.inner[2].data_offset, 0xc);
-        assert_eq!(dtb.inner[2].ptr_offset + base_addr, refptr_usize!(&test_verify.c));
+        assert_eq!(
+            dtb.inner[2].ptr_offset + base_addr,
+            refptr_usize!(&test_verify.c)
+        );
 
         assert_eq!(dtb.inner[3].field_type, FieldType::U16);
         assert_eq!(dtb.inner[3].data_offset, 0xd);
-        assert_eq!(dtb.inner[3].ptr_offset + base_addr, refptr_usize!(&test_verify.d));
+        assert_eq!(
+            dtb.inner[3].ptr_offset + base_addr,
+            refptr_usize!(&test_verify.d)
+        );
 
         let ptr_a = (base_addr + dtb.inner[0].ptr_offset) as *const u32;
         let ptr_b = (base_addr + dtb.inner[1].ptr_offset) as *const u64;
@@ -165,7 +244,5 @@ mod builder_tests {
             assert_eq!(*ptr_c, test_verify.c);
             assert_eq!(*ptr_d, test_verify.d);
         }
-
     }
-
 }
