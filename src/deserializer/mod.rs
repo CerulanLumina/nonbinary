@@ -9,7 +9,6 @@ pub trait VecLike<T>: Extend<T> + AsRef<[T]> + Default {}
 impl<V, T: Extend<V> + AsRef<[V]> + Default> VecLike<V> for T {}
 
 
-
 pub struct DeserializerBuilder<T, V> where T: VecLike<DataType<V>>, V: VecLike<DataField> {
     _phantom: PhantomData<V>,
     inner: T
@@ -80,6 +79,8 @@ pub struct DataField {
     ptr_offset: usize,
 }
 
+#[cfg_attr(test, derive(Debug))]
+#[derive(Eq, PartialEq)]
 pub enum FieldType {
     U8,
     I8,
@@ -92,72 +93,79 @@ pub enum FieldType {
     DataType(usize),
 }
 
-// #[cfg(feature = "std")]
-// pub mod alloc;
-//
-// pub struct DeserializerBuilder<D: DeserializerBuilderImpl> {
-//     inner: D,
-// }
-//
-// trait DeserializerBuilderImpl: Sized {
-//     type DeserializerImpl: DeserializerImpl;
-//     type NBTypeBuilder: NBTypeBuilderImpl;
-//     type NBType: NBTypeImpl;
-//     fn new() -> Self;
-//     fn register_type(mut self, key: usize, new_type: NBType<Self::NBType>) -> Self;
-//     fn register_type_builder<F>(mut self, key: usize, builder: F) -> Self
-//         where F: FnOnce(Self::NBTypeBuilder) -> Self::NBTypeBuilder + 'static {
-//         let new_type = builder(Self::NBTypeBuilder::new()).build();
-//         self.register_type(key, new_type);
-//         self
-//     }
-//     fn set_root_type(mut self, root: usize);
-//     fn build(self) -> NBDeserializer<Self::DeserializerImpl>;
-// }
-//
-// trait NBTypeBuilderImpl: Sized {
-//     type TypeImpl: NBTypeImpl;
-//     fn new() -> Self;
-//     fn register_field(self) -> Self;
-//     fn build(self) -> NBType<Self::TypeImpl>;
-// }
-//
-// struct NBDeserializer<D: DeserializerImpl> {
-//     inner: D
-// }
-//
-// impl<D: DeserializerImpl> NBDeserializer<D> {
-//
-// }
-//
-// trait DeserializerImpl: Sized {
-//     fn root_type(&self) -> usize;
-//     fn types(&self) -> &[NBType<>]
-// }
-//
-//
-//
-// struct NBType<I: NBTypeImpl> {
-//     inner: I
-// }
-//
-// struct NBField {
-//     field_type: FieldType,
-//     struct_offset: usize,
-//     data_offset: usize,
-// }
-//
-// pub enum FieldType {
-//     I8,
-//     U8,
-//     I16,
-//     U16,
-//     I32,
-//     U32,
-// }
-//
-// trait NBTypeImpl: Sized {
-//     fn fields(&self) -> &[NBField];
-// }
+#[cfg(test)]
+mod builder_tests {
+    use crate::deserializer::{DataField, DataType, DataTypeBuilder, DeserializerBuilder, FieldType, VecLike};
+    use std::prelude::rust_2021::*;
+    use arrayvec::ArrayVec;
 
+    macro_rules! refptr_usize {
+        ($e:expr) => { $e as *const _ as usize };
+    }
 
+    #[test]
+    fn build_simple_data_type_alloc() {
+        build_simple_data_type::<Vec<_>>();
+    }
+
+    #[test]
+    fn build_simple_data_type_nonalloc() {
+        build_simple_data_type::<ArrayVec<_, 4>>();
+    }
+
+    fn build_simple_data_type<T: VecLike<DataField>>() {
+
+        #[derive(Copy, Clone, Default)]
+        #[allow(unused)]
+        struct MyStruct {
+            a: u32,
+            b: u64,
+            c: u8,
+            d: u16,
+        }
+
+        let mut dtb = DataTypeBuilder::<Vec<_>, _>::new(MyStruct::default());
+        dtb.register_field(0x0, |a| &a.a);
+        dtb.register_field(0x4, |a| &a.b);
+        dtb.register_field(0xc, |a| &a.c);
+        dtb.register_field(0xd, |a| &a.d);
+
+        let test_verify = MyStruct { a: 32, b:12, c:64, d:8 };
+        let base_addr = refptr_usize!(&test_verify);
+
+        assert_eq!(dtb.inner[0].field_type, FieldType::U32);
+        assert_eq!(dtb.inner[0].data_offset, 0x0);
+        assert_eq!(dtb.inner[0].ptr_offset + base_addr, refptr_usize!(&test_verify.a));
+
+        assert_eq!(dtb.inner[1].field_type, FieldType::U64);
+        assert_eq!(dtb.inner[1].data_offset, 0x4);
+        assert_eq!(dtb.inner[1].ptr_offset + base_addr, refptr_usize!(&test_verify.b));
+
+        assert_eq!(dtb.inner[2].field_type, FieldType::U8);
+        assert_eq!(dtb.inner[2].data_offset, 0xc);
+        assert_eq!(dtb.inner[2].ptr_offset + base_addr, refptr_usize!(&test_verify.c));
+
+        assert_eq!(dtb.inner[3].field_type, FieldType::U16);
+        assert_eq!(dtb.inner[3].data_offset, 0xd);
+        assert_eq!(dtb.inner[3].ptr_offset + base_addr, refptr_usize!(&test_verify.d));
+
+        let ptr_a = (base_addr + dtb.inner[0].ptr_offset) as *const u32;
+        let ptr_b = (base_addr + dtb.inner[1].ptr_offset) as *const u64;
+        let ptr_c = (base_addr + dtb.inner[2].ptr_offset) as *const u8;
+        let ptr_d = (base_addr + dtb.inner[3].ptr_offset) as *const u16;
+
+        assert_eq!(ptr_a, (&test_verify.a) as *const u32);
+        assert_eq!(ptr_b, (&test_verify.b) as *const u64);
+        assert_eq!(ptr_c, (&test_verify.c) as *const u8);
+        assert_eq!(ptr_d, (&test_verify.d) as *const u16);
+
+        unsafe {
+            assert_eq!(*ptr_a, test_verify.a);
+            assert_eq!(*ptr_b, test_verify.b);
+            assert_eq!(*ptr_c, test_verify.c);
+            assert_eq!(*ptr_d, test_verify.d);
+        }
+
+    }
+
+}
