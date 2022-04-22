@@ -60,6 +60,11 @@ where
             inner: veclike,
         }
     }
+
+    pub fn deserialize<D, Struct>(&self, from: D, out: &mut Struct) where D: AsRef<[u8]> {
+        let root = &self.inner.as_ref()[0];
+        root.deserialize(from, out);
+    }
 }
 
 pub struct DataTypeBuilder<T, Struct>
@@ -113,6 +118,19 @@ macro_rules! basic_impl {
             fn field_type() -> FieldType { FieldType::$i }
         }
         )*
+        impl FieldType {
+            pub fn copy(&self, from_ptr_usize: usize, to_ptr_usize: usize) {
+                match self {
+                    $(
+                    FieldType::$i => {
+                        let from = from_ptr_usize as *mut $t;
+                        let to = to_ptr_usize as *mut $t;
+                        unsafe { *to = *from; }
+                    },
+                    )*
+                }
+            }
+        }
     };
 }
 
@@ -134,10 +152,26 @@ where
     inner: T,
 }
 
+impl<T> DataType<T> where T: VecLike<DataField> {
+    pub fn deserialize<D: AsRef<[u8]>, Struct>(&self, data: D, out: &mut Struct) {
+        for x in self.inner.as_ref() {
+            x.read_into(&data, out);
+        }
+    }
+}
+
 pub struct DataField {
     field_type: FieldType,
     data_offset: usize,
     ptr_offset: usize,
+}
+
+impl DataField {
+    pub fn read_into<D: AsRef<[u8]>, Struct>(&self, data: D, out: &mut Struct) {
+        let ptr_out = out as *mut _ as usize + self.ptr_offset;
+        let ptr_in = &data.as_ref()[0] as *const _ as usize + self.data_offset;
+        self.field_type.copy(ptr_in, ptr_out);
+    }
 }
 
 #[cfg_attr(test, derive(Debug))]
@@ -151,7 +185,6 @@ pub enum FieldType {
     I32,
     U64,
     I64,
-    DataType(usize),
 }
 
 #[cfg(test)]
@@ -174,6 +207,26 @@ mod builder_tests {
     #[test]
     fn build_simple_data_type_nonalloc() {
         build_simple_data_type::<ArrayVec<_, 4>>();
+    }
+
+    #[derive(Default, Copy, Clone, Eq, PartialEq)]
+    struct StructA {
+        a: u64,
+        b: u32,
+        c: u16,
+        d: u8,
+        e: u64,
+    }
+
+    #[test]
+    fn try_deser() {
+
+
+
+        let mut owo = DeserializerBuilder::new();
+        DataTypeBuilder::new(StructA::default())
+            .register_field(0x0, |a| &a.a);
+        owo.register_type()
     }
 
     fn build_simple_data_type<T: VecLike<DataField>>() {
