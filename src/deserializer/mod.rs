@@ -218,17 +218,6 @@ mod builder_tests {
         e: u64,
     }
 
-    #[test]
-    fn try_deser() {
-
-
-
-        let mut owo = DeserializerBuilder::new();
-        DataTypeBuilder::new(StructA::default())
-            .register_field(0x0, |a| &a.a);
-        owo.register_type()
-    }
-
     fn build_simple_data_type<T: VecLike<DataField>>() {
         #[derive(Copy, Clone, Default)]
         #[allow(unused)]
